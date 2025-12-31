@@ -1,0 +1,5 @@
+{
+  "spot": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BOME/USDT", "JUP/USDT", "BONK/USDT"],
+  "futures": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BOME/USDT", "BONK/USDT"],
+  "stables": ["USDT", "USDC"]
+}

@@ -1,0 +1,15 @@
+{
+  "enabled_cogs": [
+    "scheduler",
+    "rt_watch",
+    "tradeflow",
+    "signal_embed",
+    "go",
+    "go_autorun",
+    "sync_universe_autostart",
+    "health"
+  ],
+  "aliases": {
+    "g": "go"
+  }
+}

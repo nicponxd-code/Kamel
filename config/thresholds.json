@@ -1,0 +1,7 @@
+{
+  "score_min": 0.30,
+  "confidence_min": 0.45,
+  "rr_min": 1.10,
+  "edge_threshold": 0.55,
+  "publish_threshold": 0.68
+}
