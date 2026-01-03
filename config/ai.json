@@ -1,6 +1,0 @@
-{
-  "daily_tokens": 20000,
-  "daily_calls": 200,
-  "per_call_tokens_max": 1500,
-  "enabled": true
-}
