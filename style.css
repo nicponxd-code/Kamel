@@ -1,0 +1,26 @@
+# TrayCut (PWA)
+Offline kalkulator do trasowania/cięcia koryt kablowych + automatyczny rysunek (SVG).
+
+## Funkcje (v5)
+- Offset poziomy (ominięcie i powrót) 30° / 45° / AUTO / Własny kąt
+- Offset pionowy (góra/dół) 30° / 45° / AUTO / Własny kąt
+- Kalkulator współczynników (Angle / Diagonal / Straight) dla kąta
+- Kalkulator kąta z a i b (trójkąt prostokątny): kąt, przeciwprostokątna
+
+## Instalacja na iPhone (PWA)
+1. Wdróż repo na GitHub Pages (HTTPS).
+2. Otwórz w Safari.
+3. Udostępnij → „Dodaj do ekranu początkowego”.
+
+## Development (lokalnie)
+```bash
+python3 -m http.server 8080
+# http://localhost:8080
+```
+
+## Export
+W module z rysunkiem kliknij „Eksport SVG”.
+
+- Zakręt (mitra) — dowolny kąt θ (cięcie na końcach dwóch odcinków)
+
+- Zakręt (1 element, kliny) — segmentowany: θ, N → kliny na burtach

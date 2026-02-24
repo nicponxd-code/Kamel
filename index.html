@@ -1,0 +1,439 @@
+const $=(id)=>document.getElementById(id);
+
+const state={page:"home", module:"offset_h"};
+
+function rad(d){return d*Math.PI/180;}
+function fmt(x,d=1){ if(!isFinite(x)) return "—"; const p=Math.pow(10,d); return (Math.round(x*p)/p).toFixed(d); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+
+function setPage(page){
+  $("home").classList.toggle("hidden", page!=="home");
+  $("calc").classList.toggle("hidden", page!=="calc");
+  $("backBtn").classList.toggle("hidden", page!=="calc");
+  $("exportSvg").classList.toggle("hidden", page!=="calc" || !(state.module==="offset_h" || state.module==="offset_v"));
+  $("reset").classList.toggle("hidden", page!=="calc");
+  $("subtitle").textContent = page==="home" ? "Wybierz moduł" : "Wpisz dane → dostajesz wymiary + rysunek";
+}
+
+function showBlocks(){
+  const isOffset = (state.module==="offset_h" || state.module==="offset_v" || state.module==="rise");
+  $("commonBlock").classList.toggle("hidden", !isOffset);
+  $("offsetBlock").classList.toggle("hidden", !isOffset);
+  $("drawingBlock").classList.toggle("hidden", !isOffset);
+  $("rightOffset").classList.toggle("hidden", !isOffset);
+  $("rightOther").classList.toggle("hidden", isOffset);
+
+  $("elbowBlock").classList.toggle("hidden", state.module!=="elbow");
+  $("elbowSegBlock").classList.toggle("hidden", state.module!=="elbow_seg");
+  $("coeffBlock").classList.toggle("hidden", state.module!=="coeff");
+  $("abBlock").classList.toggle("hidden", state.module!=="ab");
+
+  if(state.module==="coeff" || state.module==="ab"){
+    $("otherOut").innerHTML = "";
+    $("svgHost").innerHTML = "";
+  }
+}
+
+function setModule(mod){
+  state.module = mod;
+  $("calcTitle").textContent =
+    mod==="offset_h" ? "Offset poziomy (ominięcie i powrót)" :
+    mod==="offset_v" ? "Offset pionowy (góra/dół)" :
+    mod==="rise" ? "Podjazd (góra/dół) — dokładny kąt φ" :
+    mod==="elbow_seg" ? "Zakręt (1 element, kliny) — segmentowany" :
+    mod==="elbow" ? "Zakręt (mitra) — dowolny kąt θ" :
+    mod==="coeff" ? "Współczynniki kąta" :
+    mod==="ab" ? "Kąt z a i b" : "Moduł";
+
+  if(mod==="offset_h"){ $("dLabel").textContent="Offset boczny"; $("dName").firstChild.textContent="D [mm]"; $("D").value=300; }
+  if(mod==="offset_v"){ $("dLabel").textContent="Offset pionowy"; $("dName").firstChild.textContent="h [mm]"; $("D").value=120; }
+if(mod==="rise"){ $("dLabel").textContent="Podjazd (wysokość)"; $("dName").firstChild.textContent="h [mm]"; $("D").value=120; }
+if(mod==="elbow"){ /* brak D */ }
+
+  showBlocks();
+  render();
+}
+
+function readOffsetInputs(){
+  return {
+    angleMode: $("angleMode").value,
+    phiCustom: Number($("phiCustom").value||0),
+    tol: Number($("tol").value||0),
+    W: Number($("W").value||0),
+    H: Number($("H").value||0),
+    D: Number($("D").value||0),
+    Lavail: Number($("Lavail").value||0),
+    useMaxMid: $("useMaxMid").checked,
+    Lmid: Number($("Lmid").value||0)
+  };
+}
+
+function calcOffsetForAngle(phiDeg, inp){
+  const {W,H,D,Lavail,tol} = inp;
+  const phi=rad(phiDeg), sinp=Math.sin(phi), tanp=Math.tan(phi);
+  if(!(W>0&&H>0&&D>=0&&Lavail>0)) return {ok:false, phiDeg};
+  if(sinp<=1e-9||Math.abs(tanp)<=1e-9) return {ok:false, phiDeg};
+  const P = (D===0)?0:(D/tanp);
+  const S = (D===0)?0:(D/sinp);
+  const LmidMax = Lavail - 2*P;
+  const setbackEdge=(W/2)/tanp;
+  const Lcut=W/sinp;
+  const reliefA=H/tanp, reliefB=H;
+  return {ok:LmidMax>=-Math.max(0,tol), phiDeg, P,S,LmidMax,setbackEdge,Lcut,reliefA,reliefB};
+}
+
+function chooseAngle(inp){
+  const c30=calcOffsetForAngle(30,inp), c45=calcOffsetForAngle(45,inp);
+  const mode=inp.angleMode;
+
+  if(mode==="30") return {chosen:30,c30,c45};
+  if(mode==="45") return {chosen:45,c30,c45};
+
+  if(mode==="CUSTOM"){
+    const phi = Number(inp.phiCustom||0);
+    const phiClamped = Math.max(1, Math.min(89, phi));
+    const cCustom = calcOffsetForAngle(phiClamped, inp);
+    return {chosen: phiClamped, c30, c45, cCustom};
+  }
+
+  if(c30.ok&&c45.ok) return {chosen:(c45.LmidMax>=c30.LmidMax?45:30),c30,c45};
+  if(c45.ok) return {chosen:45,c30,c45};
+  if(c30.ok) return {chosen:30,c30,c45};
+  return {chosen:null,c30,c45};
+}
+
+function setStatus(msg){ $("status").textContent = msg || ""; }
+
+function drawTemplates(a,b){
+  function tpl(){
+    const pad=10, w=a+pad*2, h=b+pad*2;
+    const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    svg.setAttribute("viewBox",`0 0 ${w} ${h}`);
+    svg.setAttribute("width","100%");
+    const rect=document.createElementNS(svg.namespaceURI,"rect");
+    rect.setAttribute("x","0");rect.setAttribute("y","0");rect.setAttribute("width",w);rect.setAttribute("height",h);rect.setAttribute("fill","#fff");
+    svg.appendChild(rect);
+    const poly=document.createElementNS(svg.namespaceURI,"polygon");
+    poly.setAttribute("points",`${pad},${pad+b} ${pad},${pad} ${pad+a},${pad+b}`);
+    poly.setAttribute("fill","#f2f4ff");poly.setAttribute("stroke","#111");poly.setAttribute("stroke-width","1");
+    svg.appendChild(poly);
+    const t1=document.createElementNS(svg.namespaceURI,"text");
+    t1.setAttribute("x",pad);t1.setAttribute("y",pad+b+14);t1.setAttribute("font-size","10");
+    t1.textContent=`a=${fmt(a)}mm`;
+    svg.appendChild(t1);
+    const t2=document.createElementNS(svg.namespaceURI,"text");
+    t2.setAttribute("x",pad+2);t2.setAttribute("y",pad+12);t2.setAttribute("font-size","10");
+    t2.textContent=`b=${fmt(b)}mm`;
+    svg.appendChild(t2);
+    return svg;
+  }
+  $("tplLeft").innerHTML=""; $("tplLeft").appendChild(tpl());
+  $("tplRight").innerHTML=""; $("tplRight").appendChild(tpl());
+}
+
+// geometry helpers for svg
+function v(x,y){return {x,y};}
+function add(a,b){return v(a.x+b.x,a.y+b.y);}
+function sub(a,b){return v(a.x-b.x,a.y-b.y);}
+function mul(a,k){return v(a.x*k,a.y*k);}
+function len(a){return Math.hypot(a.x,a.y);}
+function norm(a){const l=len(a);return l<1e-9?v(0,0):v(a.x/l,a.y/l);}
+function perp(a){return v(-a.y,a.x);}
+function lineIntersection(p1,d1,p2,d2){
+  const det=d1.x*d2.y-d1.y*d2.x; if(Math.abs(det)<1e-9) return null;
+  const r=sub(p2,p1); const t=(r.x*d2.y-r.y*d2.x)/det;
+  return add(p1,mul(d1,t));
+}
+function offsetPolyline(points,off){
+  const n=points.length, out=new Array(n), dirs=[];
+  for(let i=0;i<n-1;i++) dirs.push(norm(sub(points[i+1],points[i])));
+  for(let i=0;i<n;i++){
+    if(i===0) out[i]=add(points[i],mul(perp(dirs[0]),off));
+    else if(i===n-1) out[i]=add(points[i],mul(perp(dirs[n-2]),off));
+    else{
+      const d1=dirs[i-1], d2=dirs[i];
+      const p1=add(points[i],mul(perp(d1),off));
+      const p2=add(points[i],mul(perp(d2),off));
+      out[i]=lineIntersection(p1,d1,p2,d2)||p2;
+    }
+  }
+  return out;
+}
+function buildCenterline(D, phiDeg, P, S, Lmid){
+  const phi=rad(phiDeg);
+  const p0=v(0,0), p1=v(P,0);
+  const dUp=v(Math.cos(phi), Math.sin(phi));
+  const p2=add(p1,mul(dUp,S));
+  const p3=v(p2.x+Lmid,p2.y);
+  const dDown=v(Math.cos(phi), -Math.sin(phi));
+  const p4=add(p3,mul(dDown,S));
+  return [p0,p1,p2,p3,p4];
+}
+function svgEl(tag,attrs={},children=[]){
+  const el=document.createElementNS("http://www.w3.org/2000/svg",tag);
+  for(const [k,v] of Object.entries(attrs)) el.setAttribute(k,String(v));
+  for(const c of children) el.appendChild(c);
+  return el;
+}
+function drawDiagram(final, inp){
+  $("svgHost").innerHTML="";
+  if(!final) return;
+  const {chosen,c,Lmid,cutStations}=final;
+  const center=buildCenterline(inp.D, chosen, c.P, c.S, Lmid);
+  const halfW=inp.W/2;
+  const left=offsetPolyline(center,+halfW);
+  const right=offsetPolyline(center,-halfW);
+  const pts=[...left,...right];
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of pts){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);}
+  const pad=40;minX-=pad;minY-=pad;maxX+=pad;maxY+=pad;
+  const scale=0.8;
+  const wpx=(maxX-minX)*scale, hpx=(maxY-minY)*scale;
+  const toPx=(p)=>v((p.x-minX)*scale,(maxY-p.y)*scale);
+  const svg=svgEl("svg",{viewBox:`0 0 ${wpx} ${hpx}`,width:"100%"});
+  const poly=[];
+  for(const p of left) poly.push(toPx(p));
+  for(let i=right.length-1;i>=0;i--) poly.push(toPx(right[i]));
+  svg.appendChild(svgEl("polygon",{points:poly.map(p=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" "),fill:"#eaeaea",stroke:"#111","stroke-width":"1.2"}));
+  const cl=center.map(toPx).map(p=>`${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(" ");
+  svg.appendChild(svgEl("polyline",{points:cl,fill:"none",stroke:"#0b5fff","stroke-width":"1.2","stroke-dasharray":"6 5"}));
+  function cutAtX(x){
+    for(let i=0;i<center.length-1;i++){
+      const a=center[i], b=center[i+1];
+      if((x>=a.x&&x<=b.x)||(x>=b.x&&x<=a.x)){
+        const t=(Math.abs(b.x-a.x)<1e-9)?0:((x-a.x)/(b.x-a.x));
+        const p=v(a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t);
+        const dir=norm(sub(b,a)), n=perp(dir), L=inp.W*1.2;
+        const p1=add(p,mul(n,L)), p2=add(p,mul(n,-L));
+        const P1=toPx(p1), P2=toPx(p2);
+        svg.appendChild(svgEl("line",{x1:P1.x,y1:P1.y,x2:P2.x,y2:P2.y,stroke:"#ef4444","stroke-width":"2"}));
+        return;
+      }
+    }
+  }
+  cutAtX(cutStations[0]); cutAtX(cutStations[1]);
+  svg.appendChild(svgEl("text",{x:10,y:18,"font-size":"12",fill:"#111"},[document.createTextNode(`Kąt ${chosen}° • D/h=${fmt(inp.D)}mm • L_avail=${fmt(inp.Lavail)}mm`)]));
+  window.__lastSvg=svg;
+  $("svgHost").appendChild(svg);
+}
+
+function buildSteps(final, inp){
+  if(!final){ $("steps").innerHTML=""; return; }
+  const {chosen,c,Lmid,cutStations}=final;
+  const html = [
+    "<ol>",
+    `<li>Ustal odcinek roboczy o długości <b>L_avail=${fmt(inp.Lavail)}mm</b>.</li>`,
+    `<li>Na osi zaznacz strefy cięcia: <b>x1=${fmt(cutStations[0])}mm</b> i <b>x2=${fmt(cutStations[1])}mm</b> od początku.</li>`,
+    `<li>W każdej strefie: na lewej i prawej krawędzi dna odmierz <b>setback=${fmt(c.setbackEdge)}mm</b> i połącz punkty (linia mitry).</li>`,
+    `<li>Na burtach zrób klin odciążający: <b>a=${fmt(c.reliefA)}mm</b> wzdłuż i <b>b=${fmt(c.reliefB)}mm</b> w pionie (symetrycznie).</li>`,
+    `<li>Kontrola: skos ma <b>S=${fmt(c.S)}mm</b>, środek <b>L_mid=${fmt(Lmid)}mm</b>.</li>`,
+    "</ol>"
+  ].join("");
+  $("steps").innerHTML = html;
+}
+
+function renderOffset(){
+  const inp=readOffsetInputs();
+  const pick=chooseAngle(inp);
+  const {chosen,c30,c45,cCustom}=pick;
+  const customLine = (cCustom && cCustom.P!==undefined) ? `• φ=${fmt(chosen,0)}°: P=${fmt(cCustom.P)}mm, L_mid_max=${fmt(cCustom.LmidMax)}mm` : "";
+  $("suggestions").innerHTML = [
+    c30.P!==undefined?`• 30°: P=${fmt(c30.P)}mm, L_mid_max=${fmt(c30.LmidMax)}mm`:"• 30°: —",
+    c45.P!==undefined?`• 45°: P=${fmt(c45.P)}mm, L_mid_max=${fmt(c45.LmidMax)}mm`:"• 45°: —",
+    customLine
+  ].filter(Boolean).join("<br>");
+
+  if(!chosen){
+    setStatus("Za mało miejsca dla 30° i 45° (zmień L_avail albo D/h).");
+    $("results").innerHTML="Brak wykonalności.";
+    $("steps").innerHTML="";
+    $("tplLeft").innerHTML="";$("tplRight").innerHTML="";
+    $("svgHost").innerHTML="";
+    return;
+  }
+  const c = (cCustom && Math.abs(chosen-30)>1e-9 && Math.abs(chosen-45)>1e-9) ? cCustom : ((chosen===30)?c30:c45);
+  let Lmid = inp.useMaxMid ? Math.max(0,c.LmidMax) : inp.Lmid;
+  Lmid = clamp(Lmid, 0, Math.max(0,c.LmidMax));
+  if(!inp.useMaxMid && inp.Lmid > c.LmidMax + inp.tol) setStatus(`L_mid obcięte do max: ${fmt(c.LmidMax)}mm.`);
+  else setStatus(`Wybrany kąt: ${chosen}°`);
+
+  const cutStations=[c.P, c.P+Lmid];
+  const final={chosen,c,Lmid,cutStations};
+
+  $("results").innerHTML = [
+    `<div><b>Wybrany kąt:</b> ${chosen}° (${inp.angleMode==="AUTO"?"AUTO":"wymuszony"})</div>`,
+    `<div><b>P</b>: ${fmt(c.P)} mm • <b>S</b>: ${fmt(c.S)} mm • <b>L_mid</b>: ${fmt(Lmid)} mm</div>`,
+    `<div><b>Strefy cięcia</b>: x1=${fmt(cutStations[0])} mm, x2=${fmt(cutStations[1])} mm</div>`,
+    `<hr>`,
+    `<div><b>Linia cięcia dna</b>: setback=${fmt(c.setbackEdge)} mm • długość linii=${fmt(c.Lcut)} mm</div>`,
+    `<div><b>Nacięcie burty</b>: a=${fmt(c.reliefA)} mm, b=${fmt(c.reliefB)} mm</div>`
+  ].join("");
+
+  drawTemplates(c.reliefA, c.reliefB);
+  buildSteps(final, inp);
+  drawDiagram(final, inp);
+}
+
+function renderCoeff(){
+  const theta=Number($("thetaCoeff").value||0);
+  if(!(theta>0 && theta<90)){ $("coeffOut").textContent="Podaj θ w zakresie 1..89°"; return; }
+  const t=rad(theta);
+  const diag=1/Math.sin(t);
+  const straight=1/Math.tan(t);
+  const angle=(2*(1-Math.cos(t)))/Math.sin(t);
+  $("coeffOut").innerHTML = `AngleCoeff = <b>${fmt(angle,3)}</b><br>DiagonalCoeff = <b>${fmt(diag,3)}</b><br>StraightCoeff = <b>${fmt(straight,3)}</b>`;
+  $("otherOut").innerHTML = $("coeffOut").innerHTML;
+}
+
+function renderAB(){
+  const a=Number($("aVal").value||0), b=Number($("bVal").value||0);
+  if(a<=0 || b<=0){ $("abOut").textContent="Podaj a>0 i b>0."; $("otherOut").textContent=$("abOut").textContent; return; }
+  const c=Math.hypot(a,b);
+  const ang=Math.atan2(b,a)*180/Math.PI; // angle between a and c
+  $("abOut").innerHTML = `c = <b>${fmt(c,2)} mm</b><br>kąt = <b>${fmt(ang,2)}°</b>`;
+  $("otherOut").innerHTML = $("abOut").innerHTML;
+}
+
+
+function renderElbow(){
+  const W = Number($("W").value||0);
+  const H = Number($("H").value||0);
+  const theta = Number($("thetaElbow").value||0);
+
+  // show right side output for "other"
+  if(!(W>0 && H>0 && theta>0 && theta<180)){
+    $("elbowStatus").textContent = "Podaj W, H > 0 i θ w zakresie 5..170°.";
+    $("otherOut").innerHTML = $("elbowStatus").textContent;
+    return;
+  }
+  const alpha = theta/2;
+  $("alphaElbow").value = fmt(alpha,0);
+
+  const a = rad(alpha);
+  const sinA = Math.sin(a);
+  const tanA = Math.tan(a);
+  if(sinA<=1e-9 || Math.abs(tanA)<=1e-9){
+    $("elbowStatus").textContent = "Zbyt mały kąt (sin/tan ~ 0).";
+    $("otherOut").innerHTML = $("elbowStatus").textContent;
+    return;
+  }
+
+  const setback = (W/2)/tanA;
+  const Lcut = W/sinA;
+  const reliefA = H/tanA;
+  const reliefB = H;
+
+  const html = [
+    `<div><b>θ</b> = ${fmt(theta,1)}° → <b>α</b> = θ/2 = ${fmt(alpha,1)}°</div>`,
+    `<div><b>Linia cięcia dna (mitra)</b>: setback=${fmt(setback)} mm • długość linii=${fmt(Lcut)} mm</div>`,
+    `<div><b>Nacięcie burty (klin)</b>: a=${fmt(reliefA)} mm, b=${fmt(reliefB)} mm</div>`,
+    `<div class="hint">To jest zakręt jako złącze mitrowe dwóch odcinków (cięcie na końcach).</div>`
+  ].join("");
+
+  $("elbowStatus").innerHTML = html;
+  $("otherOut").innerHTML = html;
+  drawTemplates(reliefA, reliefB);
+}
+
+
+function renderElbowSeg(){
+  const W = Number($("W").value||0);
+  const H = Number($("H").value||0);
+  const theta = Number($("thetaSeg").value||0);
+  const N = Math.max(1, Math.min(12, Math.floor(Number($("nSeg").value||1))));
+  const start = Math.max(0, Number($("startSeg").value||0));
+
+  if(!(W>0 && H>0 && theta>=10 && theta<=170)){
+    $("elbowSegStatus").textContent = "Podaj W, H > 0 oraz θ w zakresie 10..170°.";
+    $("otherOut").innerHTML = $("elbowSegStatus").textContent;
+    return;
+  }
+  const beta = theta / N;          // per-segment bend
+  const half = beta / 2;
+  const a = rad(half);
+  const tanHalf = Math.tan(a);
+  if(Math.abs(tanHalf) < 1e-9){
+    $("elbowSegStatus").textContent = "Zbyt mały kąt segmentu.";
+    $("otherOut").innerHTML = $("elbowSegStatus").textContent;
+    return;
+  }
+
+  const reliefA = H / tanHalf;     // wedge length along tray for each notch (approx)
+  const reliefB = H;
+
+  // For layout: suggest spacing = reliefA + 20mm gap
+  const gap = 20;
+  const pitch = reliefA + gap;
+  const positions = Array.from({length:N}, (_,i)=> start + i*pitch);
+
+  const html = [
+    `<div><b>θ</b>=${fmt(theta,1)}°, <b>N</b>=${N} → <b>β</b>=θ/N=${fmt(beta,2)}° (na każdy klin)</div>`,
+    `<div><b>Klin burty (na każdy segment)</b>: a=${fmt(reliefA)} mm, b=${fmt(reliefB)} mm</div>`,
+    `<div><b>Pozycje klinów (od punktu start)</b>: ${positions.map(p=>fmt(p,0)+"mm").join(", ")}</div>`,
+    `<div class="hint">To jest model segmentowany (praktyczny). Jak chcesz 1:1 z konkretną apką — potrzebuję ich dokładnych reguł rozstawu klinów dla tego modułu.</div>`
+  ].join("");
+  $("elbowSegStatus").innerHTML = html;
+  $("otherOut").innerHTML = html;
+
+  // templates
+  drawTemplates(reliefA, reliefB);
+}
+
+function render(){
+  if(state.module==="offset_h" || state.module==="offset_v" || state.module==="rise") renderOffset();
+  if(state.module==="elbow") renderElbow();
+  if(state.module==="elbow_seg") renderElbowSeg();
+  if(state.module==="coeff") renderCoeff();
+  if(state.module==="ab") renderAB();
+}
+
+function exportCurrentSvg(){
+  const svg=window.__lastSvg; if(!svg) return;
+  const xml=new XMLSerializer().serializeToString(svg);
+  const blob=new Blob([xml],{type:"image/svg+xml;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="traycut.svg";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function resetDefaults(){
+  if(state.module==="offset_h"||state.module==="offset_v"||state.module==="rise"){
+    $("angleMode").value="AUTO"; $("tol").value=1.0;
+    $("W").value=300; $("H").value=60;
+    $("D").value = (state.module==="offset_h")?300:120;
+    $("Lavail").value=900; $("useMaxMid").checked=true; $("Lmid").value=0;
+  }
+  if(state.module==="coeff") $("thetaCoeff").value=45;
+  if(state.module==="ab"){ $("aVal").value=100; $("bVal").value=100; }
+  render();
+}
+
+document.addEventListener("input",(e)=>{
+  const ids=["angleMode","phiCustom","tol","W","H","D","Lavail","Lmid","thetaElbow","thetaSeg","nSeg","startSeg","thetaCoeff","aVal","bVal"];
+  if(ids.includes(e.target.id)) render();
+});
+document.addEventListener("change",(e)=>{
+  if(["angleMode","useMaxMid"].includes(e.target.id)) render();
+});
+
+if($("computeBtn")) $("computeBtn").addEventListener("click", render);
+$("exportSvg").addEventListener("click", exportCurrentSvg);
+$("reset").addEventListener("click", resetDefaults);
+$("backBtn").addEventListener("click", ()=>{ setPage("home"); });
+
+document.querySelectorAll(".tile").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    setPage("calc");
+    setModule(btn.dataset.open);
+  });
+});
+
+// PWA SW
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+}
+
+setPage("home");
+

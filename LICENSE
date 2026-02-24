@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b5fff" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <title>TrayCut</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar">
+  <button id="backBtn" class="iconbtn hidden" aria-label="Wróć">←</button>
+  <div class="brand">
+    <div class="logo" aria-hidden="true"></div>
+    <div>
+      <div class="title">TrayCut</div>
+      <div class="subtitle" id="subtitle">Wybierz moduł</div>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button id="exportSvg" class="btn hidden">Eksport SVG</button>
+    <button id="reset" class="btn btn-ghost hidden">Reset</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="home" class="home">
+  <div class="homeHeader">
+    <div class="homeTitle">TrayCut</div>
+    <div class="homeSub">Kalkulator 3D — wymiary cięcia</div>
+  </div>
+
+  <div class="homeGrid">
+    <button class="homeTile" data-open="offset_h">
+      <div class="homeThumb">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <path d="M10 45 H45 L70 25 H110" fill="none" stroke="#111" stroke-width="3"/>
+          <path d="M45 45 L70 25" fill="none" stroke="#ef4444" stroke-width="3"/>
+          <path d="M70 25 L90 25" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="4 3"/>
+        </svg>
+      </div>
+      <div class="homeLabel">Offset poziomy</div>
+    </button>
+
+    <button class="homeTile" data-open="offset_v">
+      <div class="homeThumb">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <path d="M10 55 H45 L80 15 H110" fill="none" stroke="#111" stroke-width="3"/>
+          <path d="M45 55 L80 15" fill="none" stroke="#ef4444" stroke-width="3"/>
+        </svg>
+      </div>
+      <div class="homeLabel">Offset pionowy</div>
+    </button>
+
+    <button class="homeTile" data-open="elbow">
+      <div class="homeThumb">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <path d="M10 55 H60 V15" fill="none" stroke="#111" stroke-width="3"/>
+          <path d="M52 47 L68 63" fill="none" stroke="#ef4444" stroke-width="3"/>
+        </svg>
+      </div>
+      <div class="homeLabel">Zakręt (mitra)</div>
+    </button>
+
+    <button class="homeTile" data-open="elbow_seg">
+      <div class="homeThumb">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <path d="M10 55 H35 L55 40 L75 30 L95 22 L110 18" fill="none" stroke="#111" stroke-width="3"/>
+          <path d="M35 55 V65 M55 40 V50 M75 30 V40" fill="none" stroke="#ef4444" stroke-width="3"/>
+        </svg>
+      </div>
+      <div class="homeLabel">Zakręt 1-element</div>
+    </button>
+
+    <button class="homeTile" data-open="coeff">
+      <div class="homeThumb">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <path d="M18 55 L52 18 L86 55 Z" fill="none" stroke="#111" stroke-width="3"/>
+          <path d="M52 18 L52 55" fill="none" stroke="#ef4444" stroke-width="3"/>
+        </svg>
+      </div>
+      <div class="homeLabel">Tabela kątów</div>
+    </button>
+
+    <button class="homeTile" data-open="ab">
+      <div class="homeThumb">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <path d="M20 55 H80 V25 Z" fill="none" stroke="#111" stroke-width="3"/>
+          <text x="86" y="40" font-size="10" fill="#ef4444">a,b</text>
+        </svg>
+      </div>
+      <div class="homeLabel">Kąt z a i b</div>
+    </button>
+  </div>
+
+  <nav class="bottomNav" aria-label="Nawigacja">
+    <button class="navItem navActive" data-nav="home">Start</button>
+    <button class="navItem" data-nav="video">Wideo</button>
+    <button class="navItem" data-nav="calc">Kalkulator</button>
+    <button class="navItem" data-nav="me">Moje</button>
+  </nav>
+</section>
+
+  <section id="calc" class="panel hidden">
+    <div class="grid">
+      <div class="col">
+        <h2 id="calcTitle">Moduł</h2>
+
+        <div id="commonBlock" class="box hidden">
+          <h3>Ustawienia</h3>
+          <div class="row row3">
+            <label>Kąt
+              <select id="angleMode">
+                <option value="AUTO" selected>AUTO (30° / 45°)</option>
+                <option value="30">30°</option>
+                <option value="45">45°</option>
+                <option value="CUSTOM">Własny kąt…</option>
+              </select>
+            </label>
+            <label>φ — własny kąt [°]
+              <input id="phiCustom" type="number" min="1" max="89" step="1" value="37" />
+            </label>
+            <label>Tolerancja [mm]
+              <input id="tol" type="number" min="0" step="0.5" value="1.0" />
+            </label>
+          </div>
+
+          <h3>Koryto</h3>
+          <div class="row">
+            <label>W — szerokość dna [mm]
+              <input id="W" type="number" min="1" step="1" value="300" />
+            </label>
+            <label>H — wysokość burty [mm]
+              <input id="H" type="number" min="1" step="1" value="60" />
+            </label>
+          </div>
+        </div>
+
+        <div id="offsetBlock" class="box hidden">
+          <h3 id="dLabel">Offset</h3>
+          <div class="row">
+            <label id="dName">D [mm]
+              <input id="D" type="number" min="0" step="1" value="300" />
+            </label>
+            <label>L_avail — miejsce wzdłuż [mm]
+              <input id="Lavail" type="number" min="1" step="1" value="900" />
+            </label>
+          </div>
+          <div class="row">
+            <label class="checkbox">
+              <input id="useMaxMid" type="checkbox" checked />
+              Użyj maksymalnego L_mid
+            </label>
+            <label>L_mid [mm]
+              <input id="Lmid" type="number" min="0" step="1" value="0" />
+            </label>
+          </div>
+          <div id="suggestions" class="suggestions"></div>
+          <div class="status" id="status"></div>
+        </div>
+
+        
+        <div id="elbowBlock" class="box hidden">
+          <h3>Zakręt (mitra)</h3>
+          <div class="row">
+            <label>θ — kąt zakrętu [°]
+              <input id="thetaElbow" type="number" min="5" max="170" step="1" value="90" />
+            </label>
+            <label>Kąt cięcia α = θ/2 [°]
+              <input id="alphaElbow" type="number" disabled value="45" />
+            </label>
+          </div>
+          <div class="hint">Dla mitry: setback=(W/2)/tan(α), długość linii cięcia=W/sin(α).</div>
+          <div class="status" id="elbowStatus"></div>
+        </div>
+
+
+        <div id="elbowSegBlock" class="box hidden">
+          <h3>Zakręt (1 element, kliny)</h3>
+          <div class="row row3">
+            <label>θ — kąt zakrętu [°]
+              <input id="thetaSeg" type="number" min="10" max="120" step="1" value="90" />
+            </label>
+            <label>N — liczba segmentów (klinów)
+              <input id="nSeg" type="number" min="1" max="12" step="1" value="3" />
+            </label>
+            <label>Rozstaw start [mm]
+              <input id="startSeg" type="number" min="0" step="1" value="0" />
+            </label>
+          </div>
+          <div class="hint">Model praktyczny: dzielisz kąt θ na N jednakowych złamań. Każde złamanie ma β=θ/N. Klin na burcie: a=H/tan(β/2), b=H. (aproksymacja warsztatowa)</div>
+          <div class="status" id="elbowSegStatus"></div>
+        </div>
+
+<div id="coeffBlock" class="box hidden">
+          <h3>Współczynniki</h3>
+          <div class="row row3">
+            <label>Kąt θ [°]
+              <input id="thetaCoeff" type="number" min="1" max="89" step="1" value="45" />
+            </label>
+            <div class="hint">
+              Diagonal = 1/sin(θ), Straight = 1/tan(θ), Angle = 2(1-cosθ)/sinθ
+            </div>
+          </div>
+          <div class="status" id="coeffOut"></div>
+        </div>
+
+        <div id="abBlock" class="box hidden">
+          <h3>Kąt z a i b</h3>
+          <div class="row">
+            <label>a [mm]
+              <input id="aVal" type="number" min="0" step="1" value="100" />
+            </label>
+            <label>b [mm]
+              <input id="bVal" type="number" min="0" step="1" value="100" />
+            </label>
+          </div>
+          <div class="status" id="abOut"></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div id="rightOffset" class="hidden">
+          <h2>Wyniki</h2>
+          <div id="results" class="results"></div>
+
+          <h2>Instrukcja: gdzie kreślić i ciąć</h2>
+          <div id="steps" class="steps"></div>
+
+          <h2>Szablony nacięć na burtach</h2>
+          <div class="templates">
+            <div class="template">
+              <div class="template-title">Lewy bok</div>
+              <div id="tplLeft"></div>
+            </div>
+            <div class="template">
+              <div class="template-title">Prawy bok</div>
+              <div id="tplRight"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="rightOther" class="hidden">
+          <h2>Wynik</h2>
+          <div id="otherOut" class="results"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="drawingBlock" class="hidden">
+      <h2>Rysunek — czerwone linie = cięcie</h2>
+      <div id="svgHost" class="svgHost"></div>
+    </div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
